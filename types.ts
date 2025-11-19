@@ -1,0 +1,52 @@
+export enum UserRole {
+  ADMIN = 'ADMIN',
+  STAFF = 'STAFF'
+}
+
+export interface User {
+  id: string;
+  name: string;
+  role: UserRole;
+  teamId?: string;
+  avatar?: string;
+}
+
+export interface Site {
+  id: string;
+  name: string;
+  address: string;
+  status: 'active' | 'completed' | 'pending';
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  leaderId: string;
+}
+
+export interface Cost {
+  parking: number;
+  transport: number;
+  highway: number;
+}
+
+export interface WorkRecord {
+  id: string;
+  userId: string;
+  userName: string;
+  date: string; // YYYY-MM-DD
+  dayOfWeek: string;
+  siteId: string;
+  siteName: string;
+  headCount: number;
+  costs: Cost;
+  notes?: string;
+  status: 'submitted' | 'approved' | 'rejected';
+  teamId?: string;
+  teamName?: string;
+}
+
+export interface AppState {
+  currentUser: User | null;
+  view: 'login' | 'client-dashboard' | 'client-history' | 'admin-dashboard' | 'admin-records' | 'admin-users' | 'admin-sites';
+}

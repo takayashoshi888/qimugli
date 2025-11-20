@@ -15,6 +15,7 @@
     "lucide-react": "^0.554.0",
     "recharts": "^3.4.1",
     "jspdf": "2.5.1",
+    "jspdf-autotable": "3.5.31",
     "html2canvas": "1.4.1"
   },
   "devDependencies": {

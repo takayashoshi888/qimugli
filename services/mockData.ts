@@ -1,11 +1,12 @@
+
 import { User, UserRole, Site, Team, WorkRecord } from "../types";
 
 // Initial Seed Data
 const USERS: User[] = [
-  { id: 'u1', name: '管理员', role: UserRole.ADMIN, avatar: 'https://picsum.photos/200/200?random=1' },
-  { id: 'u2', name: '张伟', role: UserRole.STAFF, teamId: 't1', avatar: 'https://picsum.photos/200/200?random=2' },
-  { id: 'u3', name: '李娜', role: UserRole.STAFF, teamId: 't1', avatar: 'https://picsum.photos/200/200?random=3' },
-  { id: 'u4', name: '王强', role: UserRole.STAFF, teamId: 't2', avatar: 'https://picsum.photos/200/200?random=4' },
+  { id: 'u1', name: '管理员', username: 'admin', password: 'admin123', role: UserRole.ADMIN, avatar: 'https://picsum.photos/200/200?random=1' },
+  { id: 'u2', name: '张伟', username: 'zhangwei', password: '123', role: UserRole.STAFF, teamId: 't1', avatar: 'https://picsum.photos/200/200?random=2' },
+  { id: 'u3', name: '李娜', username: 'lina', password: '123', role: UserRole.STAFF, teamId: 't1', avatar: 'https://picsum.photos/200/200?random=3' },
+  { id: 'u4', name: '王强', username: 'wangqiang', password: '123', role: UserRole.STAFF, teamId: 't2', avatar: 'https://picsum.photos/200/200?random=4' },
 ];
 
 const SITES: Site[] = [
@@ -72,6 +73,31 @@ export const DataService = {
   getTeams: () => getLocalData<Team[]>('app_teams', TEAMS),
   getRecords: () => getLocalData<WorkRecord[]>('app_records', RECORDS),
   
+  // Auth Operations
+  login: (username: string, password: string):User | null => {
+     const users = DataService.getUsers();
+     // Simple plain text check for prototype
+     const user = users.find(u => u.username === username && u.password === password);
+     return user || null;
+  },
+
+  register: (name: string, username: string, password: string): { success: boolean, message?: string } => {
+    const users = DataService.getUsers();
+    if (users.some(u => u.username === username)) {
+        return { success: false, message: '用户名已存在' };
+    }
+    const newUser: User = {
+        id: Date.now().toString(),
+        name,
+        username,
+        password,
+        role: UserRole.STAFF,
+        avatar: `https://picsum.photos/200/200?random=${Date.now()}`
+    };
+    DataService.saveUser(newUser);
+    return { success: true };
+  },
+
   // Record Operations
   addRecord: (record: WorkRecord) => {
     const records = DataService.getRecords();
@@ -151,7 +177,8 @@ export const DataService = {
     if (exists) {
       newUsers = users.map(u => u.id === user.id ? user : u);
     } else {
-      newUsers = [...users, { ...user, id: Date.now().toString(), avatar: `https://picsum.photos/200/200?random=${Date.now()}` }];
+      // New user gets random avatar
+      newUsers = [...users, { ...user, id: user.id || Date.now().toString(), avatar: user.avatar || `https://picsum.photos/200/200?random=${Date.now()}` }];
     }
     setLocalData('app_users', newUsers);
     return newUsers;

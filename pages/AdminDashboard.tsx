@@ -1,10 +1,12 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, WorkRecord, Site, Team, UserRole, ThemeConfig } from '../types';
 import { DataService } from '../services/mockData';
 import { generateInsightReport } from '../services/geminiService';
 import { Card, Badge, Button, Modal, Input, Select } from '../components/UIComponents';
+import { CalendarView } from '../components/CalendarView';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { LayoutDashboard, FileText, Users, Map, Wand2, Loader2, MapPin, Download, Edit, Trash2, Plus, UserPlus, Building2, Briefcase, UserCog, UserMinus, FileDown, Menu, LogOut, Settings, Sun, Moon, Palette, ChevronRight, X } from 'lucide-react';
+import { LayoutDashboard, FileText, Users, Map, Wand2, Loader2, MapPin, Download, Edit, Trash2, Plus, UserPlus, Building2, Briefcase, UserCog, UserMinus, FileDown, Menu, LogOut, Settings, Sun, Moon, Palette, ChevronRight, X, Calendar as CalendarIcon } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -15,7 +17,7 @@ interface AdminDashboardProps {
   setTheme: (theme: ThemeConfig) => void;
 }
 
-type ViewType = 'dashboard' | 'records' | 'sites' | 'users' | 'teams';
+type ViewType = 'dashboard' | 'records' | 'calendar' | 'sites' | 'users' | 'teams';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, setTheme }) => {
   const [currentView, setCurrentView] = useState<ViewType>('dashboard');
@@ -33,6 +35,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
   const [modalType, setModalType] = useState<'site' | 'user' | 'team' | 'teamMembers' | 'record'>('site');
   const [editingItem, setEditingItem] = useState<any>({});
   const [selectedUserIdToAdd, setSelectedUserIdToAdd] = useState('');
+
+  // Calendar Detail Modal
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDateRecords, setSelectedDateRecords] = useState<WorkRecord[]>([]);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   const refreshData = () => {
     setRecords(DataService.getRecords());
@@ -53,10 +60,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
       { name: '活力橙', value: '234 88 12', hex: '#ea580c' },
       { name: '玫瑰红', value: '225 29 72', hex: '#e11d48' },
   ];
-
-  const toggleDarkMode = () => {
-      setTheme({ ...theme, mode: theme.mode === 'light' ? 'dark' : 'light' });
-  };
 
   const changePrimaryColor = (colorValue: string) => {
       setTheme({ ...theme, primaryColor: colorValue });
@@ -94,7 +97,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
   const handleDeleteRecord = (id: string) => { if (confirm('确定要删除?')) { DataService.deleteRecord(id); refreshData(); }};
 
   const handleExportCSV = () => {
-    // CSV export logic...
      const headers = ['ID,日期,星期,类型,员工/团队,现场,人数,停车费,交通费,高速费,总费用,状态,备注'];
     const csvRows = records.map(r => {
         const total = r.costs.parking + r.costs.transport + r.costs.highway;
@@ -111,20 +113,91 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
     link.click();
   };
 
-  const handleExportPDF = () => {
-    const input = document.getElementById('records-table-container');
-    if (input) {
-        html2canvas(input, { scale: 2, backgroundColor: theme.mode === 'dark' ? '#1f2937' : '#ffffff' }).then((canvas) => {
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const imgProps = pdf.getImageProperties(imgData);
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-            pdf.setFontSize(16);
-            pdf.text(`FieldLink Report`, 10, 10);
-            pdf.addImage(imgData, 'PNG', 0, 20, pdfWidth, pdfHeight);
-            pdf.save(`FieldLink_Report.pdf`);
+  // Improved PDF Export using html2canvas
+  const handleExportPDF = async () => {
+    const title = "FieldLink_Pro_管理报表";
+
+    // Create a temporary container for the table
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.top = '-9999px';
+    container.style.left = '0';
+    container.style.width = '210mm'; // A4 width
+    container.style.backgroundColor = '#ffffff';
+    container.style.padding = '20px';
+    container.style.fontFamily = '"SimHei", "Microsoft YaHei", sans-serif'; 
+
+    let totalCost = 0;
+
+    const rowsHtml = records.map((r, index) => {
+        const cost = r.costs.parking + r.costs.transport + r.costs.highway;
+        totalCost += cost;
+        const name = r.teamName ? `${r.teamName} (团队)` : r.userName;
+        
+        return `
+            <tr style="background-color: ${index % 2 === 0 ? '#f9fafb' : '#ffffff'};">
+                <td style="border: 1px solid #e5e7eb; padding: 8px; font-size: 12px;">${r.date}</td>
+                <td style="border: 1px solid #e5e7eb; padding: 8px; font-size: 12px;">${name}</td>
+                <td style="border: 1px solid #e5e7eb; padding: 8px; font-size: 12px;">${r.siteName}</td>
+                <td style="border: 1px solid #e5e7eb; padding: 8px; font-size: 12px;">${r.headCount}</td>
+                <td style="border: 1px solid #e5e7eb; padding: 8px; font-size: 12px;">¥${cost}</td>
+                <td style="border: 1px solid #e5e7eb; padding: 8px; font-size: 12px;">${r.status.toUpperCase()}</td>
+            </tr>
+        `;
+    }).join('');
+
+    const htmlContent = `
+        <div style="margin-bottom: 20px;">
+            <h1 style="font-size: 24px; font-weight: bold; color: #111827; margin-bottom: 8px;">管理数据报表</h1>
+            <p style="font-size: 12px; color: #6b7280;">FieldLink Pro - Admin Report</p>
+            <p style="font-size: 12px; color: #6b7280;">生成日期: ${new Date().toLocaleDateString()}</p>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+            <thead>
+                <tr style="background-color: #2563eb; color: white;">
+                    <th style="border: 1px solid #2563eb; padding: 8px; font-size: 12px;">日期</th>
+                    <th style="border: 1px solid #2563eb; padding: 8px; font-size: 12px;">员工/团队</th>
+                    <th style="border: 1px solid #2563eb; padding: 8px; font-size: 12px;">现场</th>
+                    <th style="border: 1px solid #2563eb; padding: 8px; font-size: 12px;">人数</th>
+                    <th style="border: 1px solid #2563eb; padding: 8px; font-size: 12px;">费用</th>
+                    <th style="border: 1px solid #2563eb; padding: 8px; font-size: 12px;">状态</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rowsHtml}
+            </tbody>
+            <tfoot>
+                <tr style="background-color: #f3f4f6; font-weight: bold;">
+                     <td colspan="4" style="border: 1px solid #e5e7eb; padding: 8px; text-align: right; font-size: 12px;">合计:</td>
+                    <td style="border: 1px solid #e5e7eb; padding: 8px; font-size: 12px;">¥${totalCost}</td>
+                    <td style="border: 1px solid #e5e7eb; padding: 8px;"></td>
+                </tr>
+            </tfoot>
+        </table>
+    `;
+
+    container.innerHTML = htmlContent;
+    document.body.appendChild(container);
+
+    try {
+        const canvas = await html2canvas(container, {
+            scale: 2,
+            useCORS: true,
+            logging: false
         });
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pdf.save(`${title}.pdf`);
+    } catch (error) {
+        console.error("PDF generation failed:", error);
+        alert("PDF 生成失败，请重试");
+    } finally {
+        document.body.removeChild(container);
     }
   };
 
@@ -149,7 +222,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
   // --- Modal & Item Management ---
   const openModal = (type: any, item?: any) => {
     setModalType(type);
-    setEditingItem(item ? JSON.parse(JSON.stringify(item)) : {});
+    // For new users, set default role and empty credentials
+    if (type === 'user' && !item) {
+        setEditingItem({ role: 'STAFF', username: '', password: '', name: '' });
+    } else {
+        setEditingItem(item ? JSON.parse(JSON.stringify(item)) : {});
+    }
     setSelectedUserIdToAdd('');
     setIsModalOpen(true);
   };
@@ -159,7 +237,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
     const item = editingItem;
     if (modalType === 'site') DataService.saveSite(item);
     if (modalType === 'team') DataService.saveTeam(item);
-    if (modalType === 'user') DataService.saveUser(item);
+    if (modalType === 'user') {
+        // Basic validation for users
+        if (!item.username || !item.password) {
+            alert("请输入用户名和密码");
+            return;
+        }
+        DataService.saveUser(item);
+    }
     if (modalType === 'record') {
         const selectedSite = sites.find(s => s.id === item.siteId);
         const updatedRecord = { ...item, siteName: selectedSite?.name || item.siteName };
@@ -214,6 +299,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
             
             <div className="text-xs font-bold text-muted uppercase tracking-wider px-4 py-2 mb-1 mt-6">业务管理</div>
             <NavItem view="records" icon={FileText} label="工时记录" />
+            <NavItem view="calendar" icon={CalendarIcon} label="排班日历" />
             <NavItem view="sites" icon={Map} label="现场管理" />
             
             <div className="text-xs font-bold text-muted uppercase tracking-wider px-4 py-2 mb-1 mt-6">人员组织</div>
@@ -482,6 +568,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
              <div className="max-w-6xl mx-auto">
                 {currentView === 'dashboard' && renderDashboard()}
                 {currentView === 'records' && renderRecords()}
+                {currentView === 'calendar' && (
+                     <div className="space-y-4">
+                         <h2 className="text-xl font-bold text-content">全员排班日历</h2>
+                         <CalendarView 
+                            records={records} 
+                            onDateClick={(date, dailyRecords) => {
+                                setSelectedDate(date);
+                                setSelectedDateRecords(dailyRecords);
+                                setIsDetailModalOpen(true);
+                            }}
+                         />
+                     </div>
+                )}
                 {currentView === 'sites' && (
                     <div className="space-y-4">
                         <div className="flex justify-between items-center">
@@ -517,7 +616,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
                              <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
                                  <td className="p-4 flex items-center gap-3">
                                      <img src={u.avatar} className="w-8 h-8 rounded-full"/>
-                                     <span className="font-medium text-content">{u.name}</span>
+                                     <div>
+                                         <div className="font-medium text-content">{u.name}</div>
+                                         <div className="text-xs text-muted">@{u.username}</div>
+                                     </div>
                                  </td>
                                  <td className="p-4"><span className={`text-xs px-2 py-1 rounded ${u.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>{u.role}</span></td>
                                  <td className="p-4 text-muted">{teams.find(t => t.id === u.teamId)?.name || '-'}</td>
@@ -607,14 +709,52 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
                         </div>
                      </>
                  )}
-                 {/* Add other inputs based on type as needed, keeping it concise for this update */}
-                 {(modalType === 'user' || modalType === 'team') && (
+                 {modalType === 'user' && (
+                    <>
+                        <Input label="姓名" value={editingItem?.name || ''} onChange={e=>setEditingItem({...editingItem, name: e.target.value})} />
+                        <Input label="用户名 (登录账号)" value={editingItem?.username || ''} onChange={e=>setEditingItem({...editingItem, username: e.target.value})} />
+                        <Input type="password" label="密码" value={editingItem?.password || ''} onChange={e=>setEditingItem({...editingItem, password: e.target.value})} />
+                        <Select label="角色" value={editingItem?.role || 'STAFF'} onChange={e=>setEditingItem({...editingItem, role: e.target.value})}>
+                            <option value="STAFF">现场人员</option>
+                            <option value="ADMIN">管理员</option>
+                        </Select>
+                    </>
+                 )}
+                 {modalType === 'team' && (
                     <Input label="名称" value={editingItem?.name || ''} onChange={e=>setEditingItem({...editingItem, name: e.target.value})} />
                  )}
                  
                  <Button type="submit" className="w-full">保存更改</Button>
             </form>
          )}
+      </Modal>
+
+      <Modal
+        isOpen={isDetailModalOpen}
+        onClose={() => setIsDetailModalOpen(false)}
+        title={`${selectedDate} 记录详情`}
+      >
+          <div className="space-y-3">
+            {selectedDateRecords.length === 0 ? (
+                <p className="text-muted text-center py-4">当日无记录</p>
+            ) : (
+                selectedDateRecords.map(r => (
+                    <div key={r.id} className="border border-gray-100 dark:border-gray-700 rounded-lg p-3 bg-gray-50 dark:bg-white/5">
+                        <div className="flex justify-between mb-2">
+                            <div>
+                                <span className="font-bold text-sm text-content">{r.userName}</span>
+                                <span className="text-xs text-muted ml-2">{r.siteName}</span>
+                            </div>
+                            <Badge status={r.status} />
+                        </div>
+                        <div className="text-xs text-muted space-y-1">
+                            <div>人数: {r.headCount} | 模式: {r.teamName || '个人'}</div>
+                            <div>总费用: {(r.costs.parking + r.costs.transport + r.costs.highway).toLocaleString()}円</div>
+                        </div>
+                    </div>
+                ))
+            )}
+          </div>
       </Modal>
     </div>
   );

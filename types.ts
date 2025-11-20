@@ -1,3 +1,4 @@
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   STAFF = 'STAFF'
@@ -6,6 +7,8 @@ export enum UserRole {
 export interface User {
   id: string;
   name: string;
+  username: string; // Added for login
+  password?: string; // Added for auth (stored locally for demo)
   role: UserRole;
   teamId?: string;
   avatar?: string;

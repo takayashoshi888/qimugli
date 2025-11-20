@@ -7,16 +7,59 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
+        darkMode: 'class',
         theme: {
           extend: {
             colors: {
-              primary: '#2563eb',
-              secondary: '#475569',
+              primary: 'rgb(var(--color-primary) / <alpha-value>)',
+              secondary: 'rgb(var(--color-secondary) / <alpha-value>)',
+              surface: 'rgb(var(--color-surface) / <alpha-value>)',
+              background: 'rgb(var(--color-background) / <alpha-value>)',
+              content: 'rgb(var(--color-content) / <alpha-value>)',
+              muted: 'rgb(var(--color-muted) / <alpha-value>)',
+            },
+            fontFamily: {
+              sans: ['Inter', 'system-ui', 'sans-serif'],
             }
           }
         }
       }
     </script>
+    <style>
+      :root {
+        --color-primary: 37 99 235; /* Blue-600 */
+        --color-secondary: 71 85 105; /* Slate-600 */
+        --color-surface: 255 255 255; /* White */
+        --color-background: 249 250 251; /* Gray-50 */
+        --color-content: 17 24 39; /* Gray-900 */
+        --color-muted: 107 114 128; /* Gray-500 */
+      }
+
+      .dark {
+        --color-primary: 96 165 250; /* Blue-400 */
+        --color-secondary: 148 163 184; /* Slate-400 */
+        --color-surface: 30 41 59; /* Slate-800 */
+        --color-background: 15 23 42; /* Slate-900 */
+        --color-content: 243 244 246; /* Gray-100 */
+        --color-muted: 156 163 175; /* Gray-400 */
+      }
+      
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(156, 163, 175, 0.5); 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(156, 163, 175, 0.8); 
+      }
+    </style>
   <script type="importmap">
 {
   "imports": {
@@ -32,7 +75,7 @@
 }
 </script>
 </head>
-  <body class="bg-gray-50 text-gray-900 antialiased">
+  <body class="bg-background text-content antialiased transition-colors duration-300">
     <div id="root"></div>
   </body>
 </html>

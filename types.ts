@@ -46,6 +46,11 @@ export interface WorkRecord {
   teamName?: string;
 }
 
+export interface ThemeConfig {
+  mode: 'light' | 'dark';
+  primaryColor: string; // rgb value e.g., '37 99 235'
+}
+
 export interface AppState {
   currentUser: User | null;
   view: 'login' | 'client-dashboard' | 'client-history' | 'admin-dashboard' | 'admin-records' | 'admin-users' | 'admin-sites';

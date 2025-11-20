@@ -1,13 +1,34 @@
-import React, { useState } from 'react';
-import { User, UserRole } from './types';
+import React, { useState, useEffect } from 'react';
+import { User, UserRole, ThemeConfig } from './types';
 import { DataService } from './services/mockData';
 import ClientDashboard from './pages/ClientDashboard';
 import AdminDashboard from './pages/AdminDashboard';
-import { Button, Card } from './components/UIComponents';
 import { Users, ShieldCheck, ArrowRight } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  
+  // Theme State
+  const [theme, setTheme] = useState<ThemeConfig>({
+      mode: 'light',
+      primaryColor: '37 99 235' // Default Blue
+  });
+
+  useEffect(() => {
+      // Apply theme to document root
+      const root = document.documentElement;
+      
+      // Handle Dark Mode Class
+      if (theme.mode === 'dark') {
+          root.classList.add('dark');
+      } else {
+          root.classList.remove('dark');
+      }
+
+      // Handle CSS Variables for Colors
+      root.style.setProperty('--color-primary', theme.primaryColor);
+  }, [theme]);
+
   const allUsers = DataService.getUsers();
   const adminUser = allUsers.find(u => u.role === UserRole.ADMIN);
   const staffUser = allUsers.find(u => u.role === UserRole.STAFF);
@@ -106,22 +127,22 @@ const App: React.FC = () => {
 
   // Main App Layout
   return (
-    <div className="min-h-screen bg-gray-50">
-        {/* Role-based Logout / Header (Simple) */}
-        <div className="fixed top-4 right-4 z-50">
-            <button 
-                onClick={handleLogout}
-                className="bg-white/80 backdrop-blur-md px-4 py-2 rounded-full text-sm shadow-md border border-gray-100 hover:bg-white hover:text-red-600 hover:shadow-lg transition-all font-medium text-gray-600 flex items-center gap-2 group"
-            >
-                <span>退出登录</span>
-                <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-            </button>
-        </div>
-
+    <div className="min-h-screen bg-background text-content transition-colors duration-300">
       {currentUser.role === UserRole.ADMIN ? (
-        <AdminDashboard user={currentUser} />
+        <AdminDashboard user={currentUser} onLogout={handleLogout} theme={theme} setTheme={setTheme} />
       ) : (
-        <ClientDashboard user={currentUser} />
+        <>
+            <div className="fixed top-4 right-4 z-50">
+                <button 
+                    onClick={handleLogout}
+                    className="bg-surface/80 backdrop-blur-md px-4 py-2 rounded-full text-sm shadow-md border border-gray-100 dark:border-gray-700 hover:bg-surface hover:text-red-600 hover:shadow-lg transition-all font-medium text-muted flex items-center gap-2 group"
+                >
+                    <span>退出登录</span>
+                    <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                </button>
+            </div>
+            <ClientDashboard user={currentUser} />
+        </>
       )}
     </div>
   );

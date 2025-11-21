@@ -1,8 +1,21 @@
 import { GoogleGenAI } from "@google/genai";
 import { WorkRecord } from "../types";
 
-// Safe initialization in case env is missing in preview
-const apiKey = process.env.API_KEY || 'dummy_key'; 
+// Safe initialization: Check if process is defined to avoid "process is not defined" error in browser
+const getApiKey = () => {
+  try {
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env) {
+      // @ts-ignore
+      return process.env.API_KEY;
+    }
+  } catch (e) {
+    // Ignore error
+  }
+  return undefined;
+};
+
+const apiKey = getApiKey() || 'dummy_key'; 
 const ai = new GoogleGenAI({ apiKey });
 
 export const generateInsightReport = async (records: WorkRecord[]): Promise<string> => {

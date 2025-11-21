@@ -222,12 +222,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
   // --- Modal & Item Management ---
   const openModal = (type: any, item?: any) => {
     setModalType(type);
-    // For new users, set default role and empty credentials
+    
     if (type === 'user' && !item) {
+        // For new users, set default role and empty credentials
         setEditingItem({ role: 'STAFF', username: '', password: '', name: '' });
+    } else if (type === 'site' && !item) {
+        // For new sites, set default status to active so it appears in client dashboard
+        setEditingItem({ name: '', address: '', status: 'active' });
     } else {
         setEditingItem(item ? JSON.parse(JSON.stringify(item)) : {});
     }
+    
     setSelectedUserIdToAdd('');
     setIsModalOpen(true);
   };
@@ -244,11 +249,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
             return;
         }
         DataService.saveUser(item);
-    }
-    if (modalType === 'record') {
-        const selectedSite = sites.find(s => s.id === item.siteId);
-        const updatedRecord = { ...item, siteName: selectedSite?.name || item.siteName };
-        DataService.updateRecord(updatedRecord);
     }
     if (modalType !== 'teamMembers') {
         setIsModalOpen(false);
@@ -696,6 +696,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
                      <>
                         <Input label="名称" value={editingItem?.name || ''} onChange={e=>setEditingItem({...editingItem, name: e.target.value})} />
                         <Input label="地址" value={editingItem?.address || ''} onChange={e=>setEditingItem({...editingItem, address: e.target.value})} />
+                        <Select 
+                            label="状态" 
+                            value={editingItem?.status || 'active'} 
+                            onChange={e=>setEditingItem({...editingItem, status: e.target.value})}
+                        >
+                            <option value="active">进行中 (Active)</option>
+                            <option value="pending">筹备中 (Pending)</option>
+                            <option value="completed">已完工 (Completed)</option>
+                        </Select>
                      </>
                  )}
                  {modalType === 'record' && (

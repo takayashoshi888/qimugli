@@ -236,7 +236,7 @@ const App: React.FC = () => {
                     <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
                 </button>
             </div>
-            <ClientDashboard user={currentUser} />
+            <ClientDashboard user={currentUser} theme={theme} setTheme={setTheme} />
         </>
       )}
     </div>

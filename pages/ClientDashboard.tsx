@@ -1,22 +1,25 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, WorkRecord, Site, Team } from '../types';
+import { User, WorkRecord, Site, Team, ThemeConfig } from '../types';
 import { DataService } from '../services/mockData';
 import { Card, Button, Input, Select, Badge, Modal } from '../components/UIComponents';
 import { CalendarView } from '../components/CalendarView';
-import { Plus, History, Calendar as CalendarIcon, MapPin, Users, DollarSign, Briefcase, FileDown, CheckCircle2 } from 'lucide-react';
+import { Plus, History, Calendar as CalendarIcon, MapPin, Users, DollarSign, Briefcase, FileDown, CheckCircle2, Palette, Sun, Moon, X } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
 interface ClientDashboardProps {
   user: User;
+  theme: ThemeConfig;
+  setTheme: (theme: ThemeConfig) => void;
 }
 
-const ClientDashboard: React.FC<ClientDashboardProps> = ({ user }) => {
+const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, theme, setTheme }) => {
   const [activeTab, setActiveTab] = useState<'new' | 'history' | 'calendar'>('new');
   const [records, setRecords] = useState<WorkRecord[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [isThemePanelOpen, setIsThemePanelOpen] = useState(false);
   
   // Calendar Detail Modal
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -35,6 +38,19 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user }) => {
     workMode: 'individual' as 'individual' | 'team',
     selectedTeamId: ''
   });
+
+  // Theme Helpers
+  const colorOptions = [
+      { name: '商务蓝', value: '37 99 235', hex: '#2563eb' },
+      { name: '极光紫', value: '124 58 237', hex: '#7c3aed' },
+      { name: '森林绿', value: '5 150 105', hex: '#059669' },
+      { name: '活力橙', value: '234 88 12', hex: '#ea580c' },
+      { name: '玫瑰红', value: '225 29 72', hex: '#e11d48' },
+  ];
+
+  const changePrimaryColor = (colorValue: string) => {
+      setTheme({ ...theme, primaryColor: colorValue });
+  };
 
   useEffect(() => {
     const allRecords = DataService.getRecords();
@@ -225,17 +241,72 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user }) => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-4 pb-20">
+    <div className="max-w-3xl mx-auto p-4 pb-20 relative">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">你好, {user.name}</h1>
           <p className="text-gray-500 dark:text-gray-400">今日是 {new Date().toLocaleDateString('zh-CN')}</p>
         </div>
-        <div className="h-12 w-12 rounded-full bg-gray-200 overflow-hidden border-2 border-white dark:border-gray-700 shadow-sm">
-            <img src={user.avatar} alt={user.name} className="h-full w-full object-cover" />
+        <div className="flex items-center gap-3">
+             {/* Theme Button */}
+             <button 
+                onClick={() => setIsThemePanelOpen(!isThemePanelOpen)}
+                className="p-2 rounded-full bg-surface border border-gray-200 dark:border-gray-700 text-muted hover:text-primary shadow-sm transition-all hover:scale-105 active:scale-95"
+            >
+                <Palette size={20} />
+            </button>
+
+            <div className="h-12 w-12 rounded-full bg-gray-200 overflow-hidden border-2 border-white dark:border-gray-700 shadow-sm">
+                <img src={user.avatar} alt={user.name} className="h-full w-full object-cover" />
+            </div>
         </div>
       </div>
+
+      {/* Theme Panel (Dropdown style) */}
+      {isThemePanelOpen && (
+        <div className="absolute right-4 top-20 z-50 w-72 bg-surface rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 p-5 animate-in fade-in zoom-in duration-200 origin-top-right">
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-content">界面设置</h3>
+                <button onClick={() => setIsThemePanelOpen(false)}><X size={16} className="text-muted"/></button>
+            </div>
+            
+            <div className="mb-6">
+                <label className="text-xs font-semibold text-muted uppercase tracking-wider mb-3 block">模式</label>
+                <div className="grid grid-cols-2 gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+                    <button 
+                    onClick={() => setTheme({...theme, mode: 'light'})}
+                    className={`flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all ${theme.mode === 'light' ? 'bg-white text-primary shadow-sm' : 'text-muted'}`}
+                    >
+                        <Sun size={16} /> 浅色
+                    </button>
+                    <button 
+                    onClick={() => setTheme({...theme, mode: 'dark'})}
+                    className={`flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all ${theme.mode === 'dark' ? 'bg-gray-700 text-white shadow-sm' : 'text-muted'}`}
+                    >
+                        <Moon size={16} /> 深色
+                    </button>
+                </div>
+            </div>
+
+            <div>
+                <label className="text-xs font-semibold text-muted uppercase tracking-wider mb-3 block">主题色</label>
+                <div className="grid grid-cols-5 gap-2">
+                    {colorOptions.map(color => (
+                        <button
+                        key={color.value}
+                        onClick={() => changePrimaryColor(color.value)}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform hover:scale-110 ${theme.primaryColor === color.value ? 'ring-2 ring-offset-2 ring-offset-surface ring-gray-400' : ''}`}
+                        style={{ backgroundColor: color.hex }}
+                        title={color.name}
+                        >
+                            {theme.primaryColor === color.value && <div className="w-2 h-2 bg-white rounded-full" />}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex space-x-2 mb-6 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg overflow-x-auto">

@@ -53,25 +53,18 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, theme, setTheme
   };
 
   useEffect(() => {
-    const fetchData = async () => {
-      const allRecords = await DataService.getRecords();
-      setRecords(allRecords.filter(r => r.userId === user.id));
-      
-      const allSites = await DataService.getSites();
-      const activeSites = allSites.filter(s => s.status === 'active');
-      setSites(activeSites); 
-      
-      const allTeams = await DataService.getTeams();
-      setTeams(allTeams);
-      
-      if (activeSites.length > 0) {
-        setFormData(prev => ({ ...prev, siteId: activeSites[0].id }));
-      }
-    };
-    fetchData();
+    const allRecords = DataService.getRecords();
+    setRecords(allRecords.filter(r => r.userId === user.id));
+    setSites(DataService.getSites().filter(s => s.status === 'active')); 
+    setTeams(DataService.getTeams());
+    
+    const availableSites = DataService.getSites().filter(s => s.status === 'active');
+    if (availableSites.length > 0) {
+      setFormData(prev => ({ ...prev, siteId: availableSites[0].id }));
+    }
   }, [user.id]);
 
-  const handleWorkModeChange = async (mode: 'individual' | 'team') => {
+  const handleWorkModeChange = (mode: 'individual' | 'team') => {
     if (mode === 'individual') {
       setFormData(prev => ({ 
         ...prev, 
@@ -81,7 +74,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, theme, setTheme
       }));
     } else {
       const userTeamId = user.teamId || (teams.length > 0 ? teams[0].id : '');
-      const teamSize = await calculateTeamSize(userTeamId);
+      const teamSize = calculateTeamSize(userTeamId);
       setFormData(prev => ({ 
         ...prev, 
         workMode: mode, 
@@ -91,8 +84,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, theme, setTheme
     }
   };
 
-  const handleTeamChange = async (teamId: string) => {
-    const teamSize = await calculateTeamSize(teamId);
+  const handleTeamChange = (teamId: string) => {
+    const teamSize = calculateTeamSize(teamId);
     setFormData(prev => ({
       ...prev,
       selectedTeamId: teamId,
@@ -100,14 +93,14 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, theme, setTheme
     }));
   };
 
-  const calculateTeamSize = async (teamId: string): Promise<number> => {
+  const calculateTeamSize = (teamId: string): number => {
     if (!teamId) return 1;
-    const users = await DataService.getUsers();
+    const users = DataService.getUsers();
     const count = users.filter(u => u.teamId === teamId).length;
     return count > 0 ? count : 1;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const selectedSite = sites.find(s => s.id === formData.siteId);
     if (!selectedSite) return;
@@ -140,17 +133,16 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, theme, setTheme
       teamName: teamName
     };
 
-    await DataService.addRecord(newRecord);
-    const updatedRecords = await DataService.getRecords();
+    const updatedRecords = DataService.addRecord(newRecord);
     setRecords(updatedRecords.filter(r => r.userId === user.id));
     setActiveTab('history');
     setFormData(prev => ({ ...prev, parking: 0, transport: 0, highway: 0 }));
     alert('✅ 提交成功！数据已同步至管理系统。');
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (confirm('确定要删除这条记录吗？')) {
-      await DataService.deleteRecord(id);
+      DataService.deleteRecord(id);
       setRecords(prev => prev.filter(r => r.id !== id));
     }
   };

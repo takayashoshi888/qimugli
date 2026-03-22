@@ -1,125 +1,193 @@
+
 import { User, UserRole, Site, Team, WorkRecord } from "../types";
 
+// Initial Seed Data
+const USERS: User[] = [
+  { id: 'u1', name: '管理员', username: 'admin', password: 'admin123', role: UserRole.ADMIN, avatar: 'https://picsum.photos/200/200?random=1' },
+  { id: 'u2', name: '张伟', username: 'zhangwei', password: '123', role: UserRole.STAFF, teamId: 't1', avatar: 'https://picsum.photos/200/200?random=2' },
+  { id: 'u3', name: '李娜', username: 'lina', password: '123', role: UserRole.STAFF, teamId: 't1', avatar: 'https://picsum.photos/200/200?random=3' },
+  { id: 'u4', name: '王强', username: 'wangqiang', password: '123', role: UserRole.STAFF, teamId: 't2', avatar: 'https://picsum.photos/200/200?random=4' },
+];
+
+const SITES: Site[] = [
+  { id: 's1', name: '滨江中心一期', address: '滨江路88号', status: 'active' },
+  { id: 's2', name: '科技园北区改造', address: '科技大道102号', status: 'active' },
+  { id: 's3', name: '老城维修项目', address: '解放路33号', status: 'pending' },
+];
+
+const TEAMS: Team[] = [
+  { id: 't1', name: '安装一队', leaderId: 'u2' },
+  { id: 't2', name: '土建二队', leaderId: 'u4' },
+];
+
+const RECORDS: WorkRecord[] = [
+  {
+    id: 'r1', userId: 'u2', userName: '张伟', date: '2023-10-23', dayOfWeek: '星期一',
+    siteId: 's1', siteName: '滨江中心一期', headCount: 4,
+    costs: { parking: 2000, transport: 5000, highway: 0 }, status: 'approved'
+  },
+  {
+    id: 'r2', userId: 'u2', userName: '张伟', date: '2023-10-24', dayOfWeek: '星期二',
+    siteId: 's1', siteName: '滨江中心一期', headCount: 4,
+    costs: { parking: 2000, transport: 5000, highway: 0 }, status: 'approved'
+  },
+  {
+    id: 'r3', userId: 'u3', userName: '李娜', date: '2023-10-23', dayOfWeek: '星期一',
+    siteId: 's2', siteName: '科技园北区改造', headCount: 2,
+    costs: { parking: 0, transport: 3000, highway: 1500 }, status: 'approved'
+  },
+  {
+    id: 'r4', userId: 'u4', userName: '王强', date: '2023-10-25', dayOfWeek: '星期三',
+    siteId: 's2', siteName: '科技园北区改造', headCount: 6,
+    costs: { parking: 5000, transport: 10000, highway: 4000 }, status: 'submitted'
+  },
+];
+
+// Helpers to simulate DB
+export const getLocalData = <T extends any[]>(key: string, defaults: T): T => {
+  const stored = localStorage.getItem(key);
+  if (!stored) {
+    localStorage.setItem(key, JSON.stringify(defaults));
+    return defaults;
+  }
+  try {
+      const parsed = JSON.parse(stored);
+      // Safety filter to remove nulls which might cause crashes
+      if (Array.isArray(parsed)) {
+          return parsed.filter(item => item !== null) as T;
+      }
+      return defaults;
+  } catch (e) {
+      return defaults;
+  }
+};
+
+export const setLocalData = <T,>(key: string, data: T): void => {
+  localStorage.setItem(key, JSON.stringify(data));
+};
+
+// Data Access Objects
 export const DataService = {
-  getUsers: async (): Promise<User[]> => {
-    const res = await fetch('/api/users');
-    return res.json();
-  },
-  getSites: async (): Promise<Site[]> => {
-    const res = await fetch('/api/sites');
-    return res.json();
-  },
-  getTeams: async (): Promise<Team[]> => {
-    const res = await fetch('/api/teams');
-    return res.json();
-  },
-  getRecords: async (): Promise<WorkRecord[]> => {
-    const res = await fetch('/api/records');
-    return res.json();
-  },
+  getUsers: () => getLocalData<User[]>('app_users', USERS),
+  getSites: () => getLocalData<Site[]>('app_sites', SITES),
+  getTeams: () => getLocalData<Team[]>('app_teams', TEAMS),
+  getRecords: () => getLocalData<WorkRecord[]>('app_records', RECORDS),
   
   // Auth Operations
-  login: async (username: string, password: string): Promise<User | null> => {
-     const res = await fetch('/api/auth/login', {
-       method: 'POST',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify({ username, password })
-     });
-     const data = await res.json();
-     if (data.success) {
-       return data.user;
-     }
-     return null;
+  login: (username: string, password: string):User | null => {
+     const users = DataService.getUsers();
+     // Simple plain text check for prototype
+     const user = users.find(u => u.username === username && u.password === password);
+     return user || null;
   },
 
-  register: async (name: string, username: string, password: string): Promise<{ success: boolean, message?: string }> => {
-    const res = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, username, password })
-    });
-    return res.json();
+  register: (name: string, username: string, password: string): { success: boolean, message?: string } => {
+    const users = DataService.getUsers();
+    if (users.some(u => u.username === username)) {
+        return { success: false, message: '用户名已存在' };
+    }
+    const newUser: User = {
+        id: Date.now().toString(),
+        name,
+        username,
+        password,
+        role: UserRole.STAFF,
+        avatar: `https://picsum.photos/200/200?random=${Date.now()}`
+    };
+    DataService.saveUser(newUser);
+    return { success: true };
   },
 
   // Record Operations
-  addRecord: async (record: WorkRecord): Promise<void> => {
-    await fetch('/api/records', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(record)
-    });
+  addRecord: (record: WorkRecord) => {
+    const records = DataService.getRecords();
+    const newRecords = [record, ...records];
+    setLocalData('app_records', newRecords);
+    return newRecords;
   },
 
-  updateRecord: async (record: WorkRecord): Promise<void> => {
-    await fetch(`/api/records/${record.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(record)
-    });
+  updateRecord: (record: WorkRecord) => {
+    const records = DataService.getRecords();
+    const newRecords = records.map(r => r.id === record.id ? record : r);
+    setLocalData('app_records', newRecords);
+    return newRecords;
   },
 
-  deleteRecord: async (id: string): Promise<void> => {
-    await fetch(`/api/records/${id}`, {
-      method: 'DELETE'
-    });
+  deleteRecord: (id: string) => {
+    const records = DataService.getRecords();
+    const newRecords = records.filter(r => r.id !== id);
+    setLocalData('app_records', newRecords);
+    return newRecords;
   },
 
-  updateRecordStatus: async (id: string, status: WorkRecord['status']): Promise<void> => {
-    await fetch(`/api/records/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status })
-    });
+  updateRecordStatus: (id: string, status: WorkRecord['status']) => {
+    const records = DataService.getRecords();
+    const newRecords = records.map(r => r.id === id ? { ...r, status } : r);
+    setLocalData('app_records', newRecords);
+    return newRecords;
   },
 
   // Site Operations
-  saveSite: async (site: Site): Promise<void> => {
-    const method = site.id && site.id !== '' ? 'PUT' : 'POST';
-    const url = site.id && site.id !== '' ? `/api/sites/${site.id}` : '/api/sites';
-    await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(site)
-    });
+  saveSite: (site: Site) => {
+    const sites = DataService.getSites();
+    const exists = sites.find(s => s.id === site.id);
+    let newSites;
+    if (exists) {
+      newSites = sites.map(s => s.id === site.id ? site : s);
+    } else {
+      newSites = [...sites, { ...site, id: Date.now().toString() }];
+    }
+    setLocalData('app_sites', newSites);
+    return newSites;
   },
 
-  deleteSite: async (id: string): Promise<void> => {
-    await fetch(`/api/sites/${id}`, {
-      method: 'DELETE'
-    });
+  deleteSite: (id: string) => {
+    const sites = DataService.getSites();
+    const newSites = sites.filter(s => s.id !== id);
+    setLocalData('app_sites', newSites);
+    return newSites;
   },
 
   // Team Operations
-  saveTeam: async (team: Team): Promise<void> => {
-    const method = team.id && team.id !== '' ? 'PUT' : 'POST';
-    const url = team.id && team.id !== '' ? `/api/teams/${team.id}` : '/api/teams';
-    await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(team)
-    });
+  saveTeam: (team: Team) => {
+    const teams = DataService.getTeams();
+    const exists = teams.find(t => t.id === team.id);
+    let newTeams;
+    if (exists) {
+      newTeams = teams.map(t => t.id === team.id ? team : t);
+    } else {
+      newTeams = [...teams, { ...team, id: Date.now().toString() }];
+    }
+    setLocalData('app_teams', newTeams);
+    return newTeams;
   },
 
-  deleteTeam: async (id: string): Promise<void> => {
-    await fetch(`/api/teams/${id}`, {
-      method: 'DELETE'
-    });
+  deleteTeam: (id: string) => {
+    const teams = DataService.getTeams();
+    const newTeams = teams.filter(t => t.id !== id);
+    setLocalData('app_teams', newTeams);
+    return newTeams;
   },
 
   // User Operations
-  saveUser: async (user: User): Promise<void> => {
-    const method = user.id && user.id !== '' ? 'PUT' : 'POST';
-    const url = user.id && user.id !== '' ? `/api/users/${user.id}` : '/api/users';
-    await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(user)
-    });
+  saveUser: (user: User) => {
+    const users = DataService.getUsers();
+    const exists = users.find(u => u.id === user.id);
+    let newUsers;
+    if (exists) {
+      newUsers = users.map(u => u.id === user.id ? user : u);
+    } else {
+      // New user gets random avatar
+      newUsers = [...users, { ...user, id: user.id || Date.now().toString(), avatar: user.avatar || `https://picsum.photos/200/200?random=${Date.now()}` }];
+    }
+    setLocalData('app_users', newUsers);
+    return newUsers;
   },
 
-  deleteUser: async (id: string): Promise<void> => {
-    await fetch(`/api/users/${id}`, {
-      method: 'DELETE'
-    });
+  deleteUser: (id: string) => {
+    const users = DataService.getUsers();
+    const newUsers = users.filter(u => u.id !== id);
+    setLocalData('app_users', newUsers);
+    return newUsers;
   }
 };

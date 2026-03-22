@@ -1,0 +1,8 @@
+name = "fieldlink-pro"
+compatibility_date = "2024-03-20"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "fieldlink-db"
+database_id = "73fafe43-61d1-413b-95cb-29b03d8075e6" # D1 Database ID

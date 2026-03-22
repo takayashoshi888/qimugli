@@ -41,11 +41,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
   const [selectedDateRecords, setSelectedDateRecords] = useState<WorkRecord[]>([]);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
-  const refreshData = () => {
-    setRecords(DataService.getRecords());
-    setSites(DataService.getSites());
-    setUsers(DataService.getUsers());
-    setTeams(DataService.getTeams());
+  const refreshData = async () => {
+    setRecords(await DataService.getRecords());
+    setSites(await DataService.getSites());
+    setUsers(await DataService.getUsers());
+    setTeams(await DataService.getTeams());
   };
 
   useEffect(() => {
@@ -92,9 +92,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
     setIsGenerating(false);
   };
 
-  const handleApprove = (id: string) => { DataService.updateRecordStatus(id, 'approved'); refreshData(); };
-  const handleReject = (id: string) => { DataService.updateRecordStatus(id, 'rejected'); refreshData(); };
-  const handleDeleteRecord = (id: string) => { if (confirm('确定要删除?')) { DataService.deleteRecord(id); refreshData(); }};
+  const handleApprove = async (id: string) => { await DataService.updateRecordStatus(id, 'approved'); refreshData(); };
+  const handleReject = async (id: string) => { await DataService.updateRecordStatus(id, 'rejected'); refreshData(); };
+  const handleDeleteRecord = async (id: string) => { if (confirm('确定要删除?')) { await DataService.deleteRecord(id); refreshData(); }};
 
   const handleExportCSV = () => {
      const headers = ['ID,日期,星期,类型,员工/团队,现场,人数,停车费,交通费,高速费,总费用,状态,备注'];
@@ -201,20 +201,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
     }
   };
 
-  const handleAddMemberToTeam = () => {
+  const handleAddMemberToTeam = async () => {
       if (!selectedUserIdToAdd || !editingItem?.id) return;
       const user = users.find(u => u.id === selectedUserIdToAdd);
       if (user) {
-          DataService.saveUser({ ...user, teamId: editingItem.id });
+          await DataService.saveUser({ ...user, teamId: editingItem.id });
           refreshData();
           setSelectedUserIdToAdd('');
       }
   };
 
-  const handleRemoveMemberFromTeam = (userId: string) => {
+  const handleRemoveMemberFromTeam = async (userId: string) => {
       const user = users.find(u => u.id === userId);
       if (user) {
-          DataService.saveUser({ ...user, teamId: undefined });
+          await DataService.saveUser({ ...user, teamId: undefined });
           refreshData();
       }
   };
@@ -237,18 +237,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
     setIsModalOpen(true);
   };
 
-  const handleModalSubmit = (e: React.FormEvent) => {
+  const handleModalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const item = editingItem;
-    if (modalType === 'site') DataService.saveSite(item);
-    if (modalType === 'team') DataService.saveTeam(item);
+    if (modalType === 'site') await DataService.saveSite(item);
+    if (modalType === 'team') await DataService.saveTeam(item);
     if (modalType === 'user') {
         // Basic validation for users
         if (!item.username || !item.password) {
             alert("请输入用户名和密码");
             return;
         }
-        DataService.saveUser(item);
+        await DataService.saveUser(item);
     }
     if (modalType !== 'teamMembers') {
         setIsModalOpen(false);
@@ -256,11 +256,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
     }
   };
 
-  const handleDeleteItem = (type: 'site' | 'user' | 'team', id: string) => {
+  const handleDeleteItem = async (type: 'site' | 'user' | 'team', id: string) => {
       if (confirm('确定删除?')) {
-          if (type === 'site') DataService.deleteSite(id);
-          if (type === 'team') DataService.deleteTeam(id);
-          if (type === 'user') DataService.deleteUser(id);
+          if (type === 'site') await DataService.deleteSite(id);
+          if (type === 'team') await DataService.deleteTeam(id);
+          if (type === 'user') await DataService.deleteUser(id);
           refreshData();
       }
   };

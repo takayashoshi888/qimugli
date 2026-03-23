@@ -74,11 +74,14 @@ export const DataService = {
   getRecords: () => getLocalData<WorkRecord[]>('app_records', RECORDS),
   
   // Auth Operations
-  login: (username: string, password: string):User | null => {
+  login: (username: string, password: string): User | null => {
      const users = DataService.getUsers();
-     // Simple plain text check for prototype
      const user = users.find(u => u.username === username && u.password === password);
-     return user || null;
+     if (user) {
+         // Return a copy to avoid reference issues
+         return { ...user };
+     }
+     return null;
   },
 
   register: (name: string, username: string, password: string): { success: boolean, message?: string } => {

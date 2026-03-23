@@ -7,7 +7,10 @@ import AdminDashboard from './pages/AdminDashboard';
 import { Users, ArrowRight, LogIn, UserPlus, Lock, User as UserIcon, AlertCircle, CheckCircle } from 'lucide-react';
 
 const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const savedUser = localStorage.getItem('fieldlink_user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
   const [isRegistering, setIsRegistering] = useState(false);
   
   // Auth Form State
@@ -51,6 +54,7 @@ const App: React.FC = () => {
     const user = DataService.login(username, password);
     if (user) {
         setCurrentUser(user);
+        localStorage.setItem('fieldlink_user', JSON.stringify(user));
         setAuthError('');
         setPassword(''); // Clear sensitive data
     } else {
@@ -88,6 +92,7 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     setCurrentUser(null);
+    localStorage.removeItem('fieldlink_user');
     setUsername('');
     setPassword('');
   };

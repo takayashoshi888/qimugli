@@ -1,0 +1,3 @@
+name = "fieldlink-worker"
+compatibility_date = "2026-03-22"
+main = "src/index.ts"

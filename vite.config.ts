@@ -21,7 +21,13 @@ export default defineConfig(({ mode }) => {
       },
       build: {
         minify: false,
-        sourcemap: false
+        sourcemap: false,
+        cssCodeSplit: false,
+        rollupOptions: {
+          output: {
+            manualChunks: undefined
+          }
+        }
       }
     };
 });

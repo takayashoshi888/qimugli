@@ -41,11 +41,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
   const [selectedDateRecords, setSelectedDateRecords] = useState<WorkRecord[]>([]);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
-  const refreshData = () => {
-    setRecords(DataService.getRecords());
-    setSites(DataService.getSites());
-    setUsers(DataService.getUsers());
-    setTeams(DataService.getTeams());
+  // Filters
+  const [filterSite, setFilterSite] = useState('');
+  const [filterUser, setFilterUser] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
+  const refreshData = async () => {
+    const [recordsData, sitesData, usersData, teamsData] = await Promise.all([
+      DataService.getRecords(),
+      DataService.getSites(),
+      DataService.getUsers(),
+      DataService.getTeams()
+    ]);
+    setRecords(recordsData);
+    setSites(sitesData);
+    setUsers(usersData);
+    setTeams(teamsData);
   };
 
   useEffect(() => {
@@ -92,9 +103,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
     setIsGenerating(false);
   };
 
-  const handleApprove = (id: string) => { DataService.updateRecordStatus(id, 'approved'); refreshData(); };
-  const handleReject = (id: string) => { DataService.updateRecordStatus(id, 'rejected'); refreshData(); };
-  const handleDeleteRecord = (id: string) => { if (confirm('确定要删除?')) { DataService.deleteRecord(id); refreshData(); }};
+  const handleApprove = async (id: string) => { await DataService.updateRecordStatus(id, 'approved'); await refreshData(); };
+  const handleReject = async (id: string) => { await DataService.updateRecordStatus(id, 'rejected'); await refreshData(); };
+  const handleDeleteRecord = async (id: string) => { if (confirm('确定要删除?')) { await DataService.deleteRecord(id); await refreshData(); }};
 
   const handleExportCSV = () => {
      const headers = ['ID,日期,星期,类型,员工/团队,现场,人数,停车费,交通费,高速费,总费用,状态,备注'];
@@ -437,44 +448,85 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
     </Card>
   );
 
-  const renderRecords = () => (
-      <div className="space-y-4">
-        <div className="flex justify-between items-center flex-wrap gap-4">
-            <h2 className="text-xl font-bold text-content">工时记录</h2>
-            <div className="flex gap-2">
-                <Button variant="secondary" onClick={handleExportPDF} className="flex items-center gap-2 text-xs"><FileDown size={14}/> 导出PDF</Button>
-                <Button variant="secondary" onClick={handleExportCSV} className="flex items-center gap-2 text-xs"><Download size={14}/> 导出CSV</Button>
+  const renderRecords = () => {
+      const filteredRecords = records.filter(r => {
+          const matchSite = !filterSite || r.siteName === filterSite;
+          const matchUser = !filterUser || r.userName === filterUser;
+          const matchStatus = !filterStatus || r.status === filterStatus;
+          return matchSite && matchUser && matchStatus;
+      });
+
+      return (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center flex-wrap gap-4">
+                <h2 className="text-xl font-bold text-content">工时记录</h2>
+                <div className="flex gap-2">
+                    <Button variant="secondary" onClick={handleExportPDF} className="flex items-center gap-2 text-xs"><FileDown size={14}/> 导出PDF</Button>
+                    <Button variant="secondary" onClick={handleExportCSV} className="flex items-center gap-2 text-xs"><Download size={14}/> 导出CSV</Button>
+                </div>
             </div>
-        </div>
-        {renderTable(
-            ['日期', '填报人', '性质', '现场', '人数', '总费用', '状态', '审核', '操作'],
-            records,
-            (r) => (
-                <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
-                    <td className="p-4">{r.date}</td>
-                    <td className="p-4 font-medium text-content">{r.userName}</td>
-                    <td className="p-4">{r.teamName ? <Badge status="active"/> : <span className="text-xs text-muted">个人</span>}</td>
-                    <td className="p-4">{r.siteName}</td>
-                    <td className="p-4">{r.headCount}</td>
-                    <td className="p-4 font-mono">¥{(r.costs.parking + r.costs.transport + r.costs.highway)}</td>
-                    <td className="p-4"><Badge status={r.status} /></td>
-                    <td className="p-4">
-                        {r.status === 'submitted' && (
-                            <div className="flex gap-2">
-                                <button onClick={() => handleApprove(r.id)} className="text-green-600 text-xs font-bold hover:underline">通过</button>
-                                <button onClick={() => handleReject(r.id)} className="text-red-500 text-xs font-bold hover:underline">驳回</button>
-                            </div>
-                        )}
-                    </td>
-                    <td className="p-4 flex gap-2">
-                        <button onClick={() => openModal('record', r)} className="text-primary hover:bg-primary/10 p-1 rounded"><Edit size={16}/></button>
-                        <button onClick={() => handleDeleteRecord(r.id)} className="text-red-500 hover:bg-red-50 p-1 rounded"><Trash2 size={16}/></button>
-                    </td>
-                </tr>
-            )
-        )}
-      </div>
-  );
+
+            <Card className="p-4 border-0 shadow-sm bg-gray-50/50 dark:bg-white/5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <Select 
+                        value={filterSite} 
+                        onChange={e => setFilterSite(e.target.value)}
+                        label="按现场筛选"
+                    >
+                        <option value="">全部现场</option>
+                        {sites.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                    </Select>
+                    <Select 
+                        value={filterUser} 
+                        onChange={e => setFilterUser(e.target.value)}
+                        label="按填报人筛选"
+                    >
+                        <option value="">全部人员</option>
+                        {users.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                    </Select>
+                    <Select 
+                        value={filterStatus} 
+                        onChange={e => setFilterStatus(e.target.value)}
+                        label="按状态筛选"
+                    >
+                        <option value="">全部状态</option>
+                        <option value="submitted">待审核</option>
+                        <option value="approved">已通过</option>
+                        <option value="rejected">已驳回</option>
+                    </Select>
+                </div>
+            </Card>
+
+            {renderTable(
+                ['日期', '填报人', '性质', '现场', '人数', '总费用', '状态', '审核', '操作'],
+                filteredRecords,
+                (r) => (
+                    <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                        <td className="p-4">{r.date}</td>
+                        <td className="p-4 font-medium text-content">{r.userName}</td>
+                        <td className="p-4">{r.teamName ? <Badge status="active"/> : <span className="text-xs text-muted">个人</span>}</td>
+                        <td className="p-4">{r.siteName}</td>
+                        <td className="p-4">{r.headCount}</td>
+                        <td className="p-4 font-mono">¥{(r.costs.parking + r.costs.transport + r.costs.highway).toLocaleString()}</td>
+                        <td className="p-4"><Badge status={r.status} /></td>
+                        <td className="p-4">
+                            {r.status === 'submitted' && (
+                                <div className="flex gap-2">
+                                    <button onClick={() => handleApprove(r.id)} className="text-green-600 text-xs font-bold hover:underline">通过</button>
+                                    <button onClick={() => handleReject(r.id)} className="text-red-500 text-xs font-bold hover:underline">驳回</button>
+                                </div>
+                            )}
+                        </td>
+                        <td className="p-4 flex gap-2">
+                            <button onClick={() => openModal('record', r)} className="text-primary hover:bg-primary/10 p-1 rounded"><Edit size={16}/></button>
+                            <button onClick={() => handleDeleteRecord(r.id)} className="text-red-500 hover:bg-red-50 p-1 rounded"><Trash2 size={16}/></button>
+                        </td>
+                    </tr>
+                )
+            )}
+          </div>
+      );
+  };
 
   // --- Main Layout ---
   return (
@@ -758,7 +810,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
                         </div>
                         <div className="text-xs text-muted space-y-1">
                             <div>人数: {r.headCount} | 模式: {r.teamName || '个人'}</div>
-                            <div>总费用: {(r.costs.parking + r.costs.transport + r.costs.highway).toLocaleString()}円</div>
+                            <div>总费用: ¥{(r.costs.parking + r.costs.transport + r.costs.highway).toLocaleString()}</div>
                         </div>
                     </div>
                 ))

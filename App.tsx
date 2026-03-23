@@ -42,7 +42,7 @@ const App: React.FC = () => {
       root.style.setProperty('--color-primary', theme.primaryColor);
   }, [theme]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
     
@@ -51,7 +51,7 @@ const App: React.FC = () => {
         return;
     }
 
-    const user = DataService.login(username, password);
+    const user = await DataService.login(username, password);
     if (user) {
         setCurrentUser(user);
         localStorage.setItem('fieldlink_user', JSON.stringify(user));
@@ -62,7 +62,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
     setAuthSuccess('');
@@ -77,7 +77,7 @@ const App: React.FC = () => {
         return;
     }
 
-    const result = DataService.register(fullName, username, password);
+    const result = await DataService.register(fullName, username, password);
     if (result.success) {
         setAuthSuccess('注册成功！请使用新账号登录。');
         setIsRegistering(false);

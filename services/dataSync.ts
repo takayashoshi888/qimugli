@@ -1,4 +1,4 @@
-import { WorkRecord, User, Site, Team } from '../types';
+import { WorkRecord } from '../types';
 import { DataService } from './mockData';
 
 interface SyncMetadata {
@@ -92,67 +92,75 @@ class DataSync {
         });
     }
 
+    private getRecordStorageKey(userId: string): string {
+        return `records_${userId}`;
+    }
+
+    private async getLocalRecords(userId: string): Promise<WorkRecord[]> {
+        let records = await this.loadFromIndexedDB(this.getRecordStorageKey(userId));
+
+        if (!records) {
+            records = this.loadFromLocal(this.getRecordStorageKey(userId));
+        }
+
+        return Array.isArray(records) ? records : [];
+    }
+
+    private async persistRecords(userId: string, records: WorkRecord[]): Promise<void> {
+        const storageKey = this.getRecordStorageKey(userId);
+        await this.saveToIndexedDB(storageKey, records);
+        this.saveToLocal(storageKey, records);
+    }
+
     async saveRecords(records: WorkRecord[], userId: string): Promise<{success: boolean, message: string}> {
         try {
-            // First save to IndexedDB
-            const existingRecords = await this.getRecords(userId);
+            const existingRecords = await this.getLocalRecords(userId);
             const mergedRecords = this.mergeRecords(existingRecords, records);
             
-            await this.saveToIndexedDB(`records_${userId}`, mergedRecords);
+            await this.persistRecords(userId, mergedRecords);
             
-            // Backup to local storage
-            this.saveToLocal(`records_${userId}`, mergedRecords);
-            
-            return { success: true, message: '数据已安全存储' };
+            return { success: true, message: '本地缓存已更新' };
         } catch (error) {
             console.error('Save records failed:', error);
             return { success: false, message: '保存失败' };
         }
     }
 
+    async removeRecord(recordId: string, userId: string): Promise<void> {
+        const existingRecords = await this.getLocalRecords(userId);
+        const nextRecords = existingRecords.filter((record) => record.id !== recordId);
+        await this.persistRecords(userId, nextRecords);
+    }
+
     private mergeRecords(existing: WorkRecord[], newRecords: WorkRecord[]): WorkRecord[] {
         const recordMap = new Map(existing.map(r => [r.id, r]));
         newRecords.forEach(r => recordMap.set(r.id, r));
-        return Array.from(recordMap.values());
+        return Array.from(recordMap.values()).sort((left, right) => right.date.localeCompare(left.date));
     }
 
     async getRecords(userId: string): Promise<WorkRecord[]> {
         try {
-            // Try IndexedDB first
-            let records = await this.loadFromIndexedDB(`records_${userId}`);
-            
-            // Fallback to local storage
-            if (!records) {
-                records = this.loadFromLocal(`records_${userId}`);
-            }
-            
-            // Fallback to mock API if no local data
-            if (!records || records.length === 0) {
+            if (navigator.onLine) {
                 const apiRecords = await DataService.getRecords();
-                records = apiRecords.filter(r => r.userId === userId);
-                if (records.length > 0) {
-                     await this.saveToIndexedDB(`records_${userId}`, records);
-                     this.saveToLocal(`records_${userId}`, records);
-                }
+                const userRecords = apiRecords.filter((record) => record.userId === userId);
+                await this.persistRecords(userId, userRecords);
+                return userRecords;
             }
-            
-            return records || [];
+
+            return await this.getLocalRecords(userId);
         } catch (error) {
             console.error('Failed to get records:', error);
-            // Emergency fallback
-            return this.loadFromLocal(`records_${userId}`) || [];
+            return await this.getLocalRecords(userId);
         }
     }
 
     async syncPendingRecords(): Promise<{success: boolean, message: string}> {
         if (!navigator.onLine) {
-            return { success: false, message: '当前离线，稍后将自动同步' };
+            return { success: false, message: '当前离线，将继续使用本地缓存' };
         }
         
         try {
-            // This would normally check for unsynced items and POST to API
-            // For now, we simulate syncing pending items
-            return { success: true, message: '后台同步完成' };
+            return { success: true, message: '已连接后台数据源' };
         } catch (error) {
             console.error('Sync failed:', error);
             return { success: false, message: '同步过程出错' };

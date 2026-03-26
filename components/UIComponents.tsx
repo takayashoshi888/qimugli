@@ -1,7 +1,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
 
-export const Card: React.FC<{ children: React.ReactNode, className?: string }> = ({ children, className = '' }) => (
+export const Card: React.FC<{ children: React.ReactNode, className?: string, key?: string | number }> = ({ children, className = '' }) => (
   <div className={`bg-surface rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 transition-colors duration-300 ${className}`}>
     {children}
   </div>

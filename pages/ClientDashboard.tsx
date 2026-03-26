@@ -1,8 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { User, WorkRecord, Site, Team, ThemeConfig } from '../types';
-import { DataService } from '../services/mockData';
+import { DataService, subscribeToDataChanges } from '../services/mockData';
 import { dataSyncManager } from '../services/dataSync';
+import { generateAvatarUrl, resolveAvatar } from '../src/avatar';
+
 import { Card, Button, Input, Select, Badge, Modal } from '../components/UIComponents';
 import { CalendarView } from '../components/CalendarView';
 import { Plus, History, Calendar as CalendarIcon, MapPin, Users, DollarSign, Briefcase, FileDown, CheckCircle2, Palette, Sun, Moon, X } from 'lucide-react';
@@ -54,14 +56,12 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, theme, setTheme
       setTheme({ ...theme, primaryColor: colorValue });
   };
 
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
     try {
-      // Initialize sync manager
       await dataSyncManager.initialize();
       
-      // Get data from multiple sources
       const [recordsData, sitesData, teamsData, usersData] = await Promise.all([
-        dataSyncManager.getRecords(user.id), // From IndexedDB first
+        dataSyncManager.getRecords(user.id),
         DataService.getSites(),
         DataService.getTeams(),
         DataService.getUsers()
@@ -74,7 +74,6 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, theme, setTheme
       setTeams(teamsData);
       setAllUsers(usersData);
       
-      // Attempt to sync pending records
       await dataSyncManager.syncPendingRecords();
       
       if (activeSites.length > 0 && !formData.siteId) {
@@ -83,11 +82,20 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, theme, setTheme
     } catch (error) {
       console.error('Data refresh failed:', error);
     }
-  };
+  }, [formData.siteId, user.id]);
 
   useEffect(() => {
     refreshData();
-  }, [user.id]);
+
+    const unsubscribe = subscribeToDataChanges((entity) => {
+      if (!entity || ['records', 'sites', 'teams', 'users'].includes(entity)) {
+        refreshData();
+      }
+    });
+
+    return unsubscribe;
+  }, [refreshData]);
+
 
   const handleWorkModeChange = (mode: 'individual' | 'team') => {
     if (mode === 'individual') {
@@ -129,6 +137,11 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, theme, setTheme
     const selectedSite = sites.find(s => s.id === formData.siteId);
     if (!selectedSite) return;
 
+    if (formData.workMode === 'team' && !formData.selectedTeamId) {
+      alert('请选择团队');
+      return;
+    }
+
     let teamName = undefined;
     if (formData.workMode === 'team' && formData.selectedTeamId) {
         const team = teams.find(t => t.id === formData.selectedTeamId);
@@ -158,30 +171,32 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, theme, setTheme
     };
 
     try {
-      // Save to IndexedDB + localStorage
-      await dataSyncManager.initialize();
-      const syncResult = await dataSyncManager.saveRecords([newRecord], user.id);
-      
-      // Also save to mock data
       await DataService.addRecord(newRecord);
+      const syncResult = await dataSyncManager.saveRecords([newRecord], user.id);
       
       await refreshData();
       setActiveTab('history');
       setFormData(prev => ({ ...prev, parking: 0, transport: 0, highway: 0 }));
       
-      alert(`✅ 提交成功！${syncResult.message}`);
-    } catch (error) {
-      alert('❌ 提交失败，请重试');
+      alert(`提交成功，${syncResult.message}，并已同步到管理面板。`);
+    } catch (error: any) {
+      alert(error?.message || '提交失败，请重试');
       console.error(error);
     }
   };
 
   const handleDelete = async (id: string) => {
     if (confirm('确定要删除这条记录吗？')) {
-      await DataService.deleteRecord(id);
-      await refreshData();
+      try {
+        await DataService.deleteRecord(id);
+        await dataSyncManager.removeRecord(id, user.id);
+        await refreshData();
+      } catch (error: any) {
+        alert(error?.message || '删除失败，请稍后重试');
+      }
     }
   };
+
 
   // Improved PDF Export using html2canvas to support Chinese characters
   const handleExportPDF = async () => {
@@ -262,7 +277,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, theme, setTheme
         });
 
         const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
 
@@ -294,8 +309,16 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, theme, setTheme
             </button>
 
             <div className="h-12 w-12 rounded-full bg-gray-200 overflow-hidden border-2 border-white dark:border-gray-700 shadow-sm">
-                <img src={user.avatar} alt={user.name} className="h-full w-full object-cover" />
+                <img
+                  src={resolveAvatar(user.avatar, user.id || user.username, user.name)}
+                  alt={user.name}
+                  className="h-full w-full object-cover"
+                  onError={(event) => {
+                    event.currentTarget.src = generateAvatarUrl(user.id || user.username, user.name);
+                  }}
+                />
             </div>
+
         </div>
       </div>
 

@@ -1,3 +1,35 @@
+const ensureRecordsSchema = async (db: any) => {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS records (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    userName TEXT NOT NULL,
+    date TEXT NOT NULL,
+    dayOfWeek TEXT NOT NULL,
+    siteId TEXT NOT NULL,
+    siteName TEXT NOT NULL,
+    headCount INTEGER NOT NULL,
+    parking INTEGER NOT NULL DEFAULT 0,
+    transport INTEGER NOT NULL DEFAULT 0,
+    highway INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'submitted',
+    notes TEXT,
+    teamId TEXT,
+    teamName TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`).run();
+
+  const { results } = await db.prepare("PRAGMA table_info(records)").all();
+  const columns = new Set((results || []).map((column: any) => column.name));
+
+  if (!columns.has('teamId')) {
+    await db.prepare("ALTER TABLE records ADD COLUMN teamId TEXT").run();
+  }
+
+  if (!columns.has('teamName')) {
+    await db.prepare("ALTER TABLE records ADD COLUMN teamName TEXT").run();
+  }
+};
+
 export async function onRequestGet(context: any) {
   const { env } = context;
   try {
@@ -5,6 +37,9 @@ export async function onRequestGet(context: any) {
       console.warn('DB binding not available, returning empty array');
       return Response.json([]);
     }
+
+    await ensureRecordsSchema(env.DB);
+
     const { results } = await env.DB.prepare("SELECT * FROM records ORDER BY date DESC").all();
     const formatted = (results || []).map((r: any) => ({
       ...r,
@@ -27,6 +62,9 @@ export async function onRequestPost(context: any) {
     if (!env.DB) {
       return Response.json({ success: false, message: 'Database not available' }, { status: 503 });
     }
+
+    await ensureRecordsSchema(env.DB);
+
     const record = await request.json();
     const id = record.id || crypto.randomUUID();
     await env.DB.prepare(
@@ -44,3 +82,4 @@ export async function onRequestPost(context: any) {
     return Response.json({ success: false, message: e.message }, { status: 500 });
   }
 }
+

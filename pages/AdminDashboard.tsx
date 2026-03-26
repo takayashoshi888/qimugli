@@ -1,7 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { User, WorkRecord, Site, Team, ThemeConfig } from '../types';
-import { DataService } from '../services/mockData';
+import { DataService, subscribeToDataChanges } from '../services/mockData';
+import { generateAvatarUrl, resolveAvatar } from '../src/avatar';
+
 import { generateInsightReport } from '../services/geminiService';
 import { Card, Badge, Button, Modal, Input, Select } from '../components/UIComponents';
 import { CalendarView } from '../components/CalendarView';
@@ -108,7 +110,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
   const [filterUser, setFilterUser] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
 
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
     const [recordsData, sitesData, usersData, teamsData] = await Promise.all([
       DataService.getRecords(),
       DataService.getSites(),
@@ -119,11 +121,36 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
     setSites(sitesData);
     setUsers(usersData);
     setTeams(teamsData);
-  };
+  }, []);
 
   useEffect(() => {
     refreshData();
-  }, []);
+
+    const unsubscribe = subscribeToDataChanges((entity) => {
+      if (!entity || ['records', 'sites', 'users', 'teams'].includes(entity)) {
+        refreshData();
+      }
+    });
+
+    const intervalId = window.setInterval(() => {
+      refreshData();
+    }, 15000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      unsubscribe();
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [refreshData]);
+
 
   // --- Theme Helpers ---
   const colorOptions = [
@@ -260,7 +287,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
         });
 
         const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
 
@@ -274,23 +301,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
     }
   };
 
-  const handleAddMemberToTeam = () => {
+  const handleAddMemberToTeam = async () => {
       if (!selectedUserIdToAdd || !editingItem?.id) return;
       const user = users.find(u => u.id === selectedUserIdToAdd);
       if (user) {
-          DataService.saveUser({ ...user, teamId: editingItem.id });
-          refreshData();
-          setSelectedUserIdToAdd('');
+          try {
+              await DataService.saveUser({ ...user, teamId: editingItem.id });
+              await refreshData();
+              setSelectedUserIdToAdd('');
+          } catch (error: any) {
+              alert(error?.message || '添加成员失败，请稍后重试');
+          }
       }
   };
 
-  const handleRemoveMemberFromTeam = (userId: string) => {
+  const handleRemoveMemberFromTeam = async (userId: string) => {
       const user = users.find(u => u.id === userId);
       if (user) {
-          DataService.saveUser({ ...user, teamId: undefined });
-          refreshData();
+          try {
+              await DataService.saveUser({ ...user, teamId: undefined });
+              await refreshData();
+          } catch (error: any) {
+              alert(error?.message || '移除成员失败，请稍后重试');
+          }
       }
   };
+
 
   // --- Modal & Item Management ---
   const openModal = (type: any, item?: any) => {
@@ -339,24 +375,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
           await DataService.saveUser(item);
       }
 
+      if (modalType === 'record') {
+        await DataService.updateRecord(item);
+      }
+
       if (modalType !== 'teamMembers') {
           setIsModalOpen(false);
           await refreshData();
       }
+
     } catch (error: any) {
       alert(error?.message || '保存失败，请稍后重试');
     }
   };
 
 
-  const handleDeleteItem = (type: 'site' | 'user' | 'team', id: string) => {
+  const handleDeleteItem = async (type: 'site' | 'user' | 'team', id: string) => {
       if (confirm('确定删除?')) {
-          if (type === 'site') DataService.deleteSite(id);
-          if (type === 'team') DataService.deleteTeam(id);
-          if (type === 'user') DataService.deleteUser(id);
-          refreshData();
+          try {
+              if (type === 'site') await DataService.deleteSite(id);
+              if (type === 'team') await DataService.deleteTeam(id);
+              if (type === 'user') await DataService.deleteUser(id);
+              await refreshData();
+          } catch (error: any) {
+              alert(error?.message || '删除失败，请稍后重试');
+          }
       }
   };
+
 
   // --- Navigation Components ---
   const NavItem = ({ view, icon: Icon, label }: { view: ViewType; icon: any; label: string }) => (
@@ -402,7 +448,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
 
           <div className="p-4 border-t border-gray-100 dark:border-gray-700 mt-auto">
             <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-gray-700">
-                <img src={user.avatar || "https://picsum.photos/100/100"} alt="Admin" className="w-10 h-10 rounded-full border-2 border-white dark:border-gray-600 shadow-sm" />
+                <img
+                  src={resolveAvatar(user.avatar, user.id || user.username, user.name)}
+                  alt="Admin"
+                  className="w-10 h-10 rounded-full border-2 border-white dark:border-gray-600 shadow-sm"
+                  onError={(event) => {
+                    event.currentTarget.src = generateAvatarUrl(user.id || user.username, user.name);
+                  }}
+                />
+
                 <div className="flex-1 min-w-0">
                     <p className="font-bold text-sm text-content truncate">{user.name}</p>
                     <p className="text-xs text-muted truncate">超级管理员</p>
@@ -500,6 +554,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
                                         paddingAngle={5}
                                     >
                                         {statusData.map((entry, index) => (
+                                            // @ts-ignore - key prop handled by React
                                             <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
                                         ))}
                                     </Pie>
@@ -745,7 +800,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {sites.map(site => (
-                                <Card key={site.id} className="group relative hover:border-primary/50 transition-colors">
+                                // @ts-ignore - key prop handled by React
+                                <Card key={`site-${site.id}`} className="group relative hover:border-primary/50 transition-colors">
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <h3 className="font-bold text-lg text-content">{site.name}</h3>
@@ -771,7 +827,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
                          {renderTable(['用户', '角色', '团队', '操作'], users, (u) => (
                              <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
                                  <td className="p-4 flex items-center gap-3">
-                                     <img src={u.avatar} className="w-8 h-8 rounded-full"/>
+                                     <img
+                                       src={resolveAvatar(u.avatar, u.id || u.username, u.name)}
+                                       className="w-8 h-8 rounded-full"
+                                       onError={(event) => {
+                                         event.currentTarget.src = generateAvatarUrl(u.id || u.username, u.name);
+                                       }}
+                                     />
+
                                      <div>
                                          <div className="font-medium text-content">{u.name}</div>
                                          <div className="text-xs text-muted">@{u.username}</div>
@@ -838,7 +901,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
                     {users.filter(u => u.teamId === editingItem?.id).map(member => (
                         <div key={member.id} className="py-3 flex justify-between items-center">
                             <div className="flex items-center gap-3">
-                                <img src={member.avatar} className="w-8 h-8 rounded-full"/>
+                                <img
+                                  src={resolveAvatar(member.avatar, member.id || member.username, member.name)}
+                                  className="w-8 h-8 rounded-full"
+                                  onError={(event) => {
+                                    event.currentTarget.src = generateAvatarUrl(member.id || member.username, member.name);
+                                  }}
+                                />
+
                                 <span className="text-sm font-medium text-content">{member.name}</span>
                             </div>
                             <button onClick={() => handleRemoveMemberFromTeam(member.id)} className="text-red-500 p-1 hover:bg-red-50 rounded"><UserMinus size={16}/></button>

@@ -22,6 +22,9 @@
       ]
     },
     "allowImportingTsExtensions": true,
-    "noEmit": true
-  }
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*", "services/**/*", "pages/**/*", "components/**/*", "functions/**/*", "types.ts", "App.tsx", "index.tsx"],
+  "exclude": ["node_modules", "dist"]
 }

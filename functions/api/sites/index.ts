@@ -12,10 +12,11 @@ export async function onRequestPost(context: any) {
   const { request, env } = context;
   try {
     const site = await request.json();
+    const id = site.id || crypto.randomUUID();
     await env.DB.prepare(
       "INSERT INTO sites (id, name, address, status) VALUES (?, ?, ?, ?)"
-    ).bind(site.id, site.name, site.address, site.status).run();
-    return Response.json({ success: true });
+    ).bind(id, site.name, site.address, site.status).run();
+    return Response.json({ success: true, id });
   } catch (e: any) {
     return Response.json({ success: false, message: e.message }, { status: 500 });
   }

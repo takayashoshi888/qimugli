@@ -372,45 +372,49 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="h-[400px]">
+            <Card className="h-[400px] flex flex-col">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="font-bold text-content text-lg">各现场费用支出</h3>
                 </div>
-                <ResponsiveContainer width="100%" height="85%">
-                    <BarChart data={costData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.mode === 'dark' ? '#374151' : '#e5e7eb'} />
-                        <XAxis dataKey="name" tick={{fontSize: 12, fill: theme.mode === 'dark' ? '#9ca3af' : '#4b5563'}} interval={0} />
-                        <YAxis tick={{fontSize: 12, fill: theme.mode === 'dark' ? '#9ca3af' : '#4b5563'}} />
-                        <Tooltip 
-                            cursor={{fill: theme.mode === 'dark' ? '#374151' : '#f3f4f6'}}
-                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                        />
-                        <Bar dataKey="value" fill={theme.mode === 'dark' ? theme.primaryColor : `rgb(${theme.primaryColor})`} radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                </ResponsiveContainer>
+                <div className="flex-1 w-full min-h-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={costData}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.mode === 'dark' ? '#374151' : '#e5e7eb'} />
+                            <XAxis dataKey="name" tick={{fontSize: 12, fill: theme.mode === 'dark' ? '#9ca3af' : '#4b5563'}} interval={0} />
+                            <YAxis tick={{fontSize: 12, fill: theme.mode === 'dark' ? '#9ca3af' : '#4b5563'}} />
+                            <Tooltip 
+                                cursor={{fill: theme.mode === 'dark' ? '#374151' : '#f3f4f6'}}
+                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            />
+                            <Bar dataKey="value" fill={theme.mode === 'dark' ? theme.primaryColor : `rgb(${theme.primaryColor})`} radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
             </Card>
-            <Card className="h-[400px]">
+            <Card className="h-[400px] flex flex-col">
                 <h3 className="font-bold text-content text-lg mb-6">记录状态分布</h3>
-                <ResponsiveContainer width="100%" height="85%">
-                    <PieChart>
-                        <Pie 
-                            data={statusData} 
-                            dataKey="value" 
-                            nameKey="name" 
-                            cx="50%" 
-                            cy="50%" 
-                            innerRadius={80} 
-                            outerRadius={110} 
-                            paddingAngle={5}
-                        >
-                            {statusData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
-                            ))}
-                        </Pie>
-                        <Tooltip contentStyle={{ borderRadius: '8px' }} />
-                        <Legend verticalAlign="bottom" height={36}/>
-                    </PieChart>
-                </ResponsiveContainer>
+                <div className="flex-1 w-full min-h-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie 
+                                data={statusData} 
+                                dataKey="value" 
+                                nameKey="name" 
+                                cx="50%" 
+                                cy="50%" 
+                                innerRadius={80} 
+                                outerRadius={110} 
+                                paddingAngle={5}
+                            >
+                                {statusData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
+                                ))}
+                            </Pie>
+                            <Tooltip contentStyle={{ borderRadius: '8px' }} />
+                            <Legend verticalAlign="bottom" height={36}/>
+                        </PieChart>
+                    </ResponsiveContainer>
+                </div>
             </Card>
         </div>
 

@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, WorkRecord, Site, Team, ThemeConfig } from '../types';
 import { DataService } from '../services/mockData';
+import { dataSyncManager } from '../services/dataSync';
 import { Card, Button, Input, Select, Badge, Modal } from '../components/UIComponents';
 import { CalendarView } from '../components/CalendarView';
 import { Plus, History, Calendar as CalendarIcon, MapPin, Users, DollarSign, Briefcase, FileDown, CheckCircle2, Palette, Sun, Moon, X } from 'lucide-react';
@@ -54,22 +55,33 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, theme, setTheme
   };
 
   const refreshData = async () => {
-    const [recordsData, sitesData, teamsData, usersData] = await Promise.all([
-      DataService.getRecords(),
-      DataService.getSites(),
-      DataService.getTeams(),
-      DataService.getUsers()
-    ]);
-    
-    setRecords(recordsData.filter(r => r.userId === user.id));
-    
-    const activeSites = sitesData.filter(s => s.status === 'active');
-    setSites(activeSites);
-    setTeams(teamsData);
-    setAllUsers(usersData);
-    
-    if (activeSites.length > 0 && !formData.siteId) {
-      setFormData(prev => ({ ...prev, siteId: activeSites[0].id }));
+    try {
+      // Initialize sync manager
+      await dataSyncManager.initialize();
+      
+      // Get data from multiple sources
+      const [recordsData, sitesData, teamsData, usersData] = await Promise.all([
+        dataSyncManager.getRecords(user.id), // From IndexedDB first
+        DataService.getSites(),
+        DataService.getTeams(),
+        DataService.getUsers()
+      ]);
+      
+      setRecords(recordsData);
+      
+      const activeSites = sitesData.filter(s => s.status === 'active');
+      setSites(activeSites);
+      setTeams(teamsData);
+      setAllUsers(usersData);
+      
+      // Attempt to sync pending records
+      await dataSyncManager.syncPendingRecords();
+      
+      if (activeSites.length > 0 && !formData.siteId) {
+        setFormData(prev => ({ ...prev, siteId: activeSites[0].id }));
+      }
+    } catch (error) {
+      console.error('Data refresh failed:', error);
     }
   };
 
@@ -145,11 +157,23 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, theme, setTheme
       teamName: teamName
     };
 
-    await DataService.addRecord(newRecord);
-    await refreshData();
-    setActiveTab('history');
-    setFormData(prev => ({ ...prev, parking: 0, transport: 0, highway: 0 }));
-    alert('✅ 提交成功！数据已同步至管理系统。');
+    try {
+      // Save to IndexedDB + localStorage
+      await dataSyncManager.initialize();
+      const syncResult = await dataSyncManager.saveRecords([newRecord], user.id);
+      
+      // Also save to mock data
+      await DataService.addRecord(newRecord);
+      
+      await refreshData();
+      setActiveTab('history');
+      setFormData(prev => ({ ...prev, parking: 0, transport: 0, highway: 0 }));
+      
+      alert(`✅ 提交成功！${syncResult.message}`);
+    } catch (error) {
+      alert('❌ 提交失败，请重试');
+      console.error(error);
+    }
   };
 
   const handleDelete = async (id: string) => {

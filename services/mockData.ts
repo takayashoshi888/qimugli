@@ -1,7 +1,21 @@
 import { User, Site, Team, WorkRecord } from "../types";
 
+const getResponseMessage = async (res: Response): Promise<string> => {
+  try {
+    const data = await res.json();
+    if (typeof data?.message === 'string' && data.message.trim()) {
+      return data.message;
+    }
+  } catch {
+    // Ignore JSON parsing errors and use fallback message below.
+  }
+
+  return `请求失败 (${res.status})`;
+};
+
 // Data Access Objects
 export const DataService = {
+
   getUsers: async (): Promise<User[]> => {
     const res = await fetch('/api/users');
     return res.json();
@@ -123,12 +137,17 @@ export const DataService = {
   saveTeam: async (team: Team): Promise<void> => {
     const method = team.id && team.id !== '' ? 'PUT' : 'POST';
     const url = team.id && team.id !== '' ? `/api/teams/${team.id}` : '/api/teams';
-    await fetch(url, {
+    const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(team)
     });
+
+    if (!res.ok) {
+      throw new Error(await getResponseMessage(res));
+    }
   },
+
 
   deleteTeam: async (id: string): Promise<void> => {
     await fetch(`/api/teams/${id}`, {

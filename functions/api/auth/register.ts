@@ -1,6 +1,9 @@
 export async function onRequestPost(context: any) {
   const { request, env } = context;
   try {
+    if (!env.DB) {
+      return Response.json({ success: false, message: 'Database not available' }, { status: 503 });
+    }
     const { name, username, password } = await request.json();
     
     // Check if username exists
@@ -12,7 +15,7 @@ export async function onRequestPost(context: any) {
       return Response.json({ success: false, message: '用户名已存在' });
     }
 
-    const id = Date.now().toString();
+    const id = crypto.randomUUID();
     const role = 'STAFF';
     const avatar = `https://picsum.photos/200/200?random=${Date.now()}`;
 
@@ -22,6 +25,7 @@ export async function onRequestPost(context: any) {
 
     return Response.json({ success: true });
   } catch (e: any) {
+    console.error('Register error:', e);
     return Response.json({ success: false, message: e.message }, { status: 500 });
   }
 }

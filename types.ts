@@ -24,8 +24,9 @@ export interface Site {
 export interface Team {
   id: string;
   name: string;
-  leaderId: string;
+  leaderId?: string | null;
 }
+
 
 export interface Cost {
   parking: number;

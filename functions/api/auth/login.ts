@@ -1,6 +1,9 @@
 export async function onRequestPost(context: any) {
   const { request, env } = context;
   try {
+    if (!env.DB) {
+      return Response.json({ success: false, message: 'Database not available' }, { status: 503 });
+    }
     const { username, password } = await request.json();
     const { results } = await env.DB.prepare(
       "SELECT * FROM users WHERE username = ? AND password = ?"
@@ -13,6 +16,7 @@ export async function onRequestPost(context: any) {
       return Response.json({ success: false, message: '用户名或密码错误' });
     }
   } catch (e: any) {
+    console.error('Login error:', e);
     return Response.json({ success: false, message: e.message }, { status: 500 });
   }
 }

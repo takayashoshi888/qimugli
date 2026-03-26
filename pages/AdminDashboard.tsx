@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, WorkRecord, Site, Team, UserRole, ThemeConfig } from '../types';
+import { User, WorkRecord, Site, Team, ThemeConfig } from '../types';
 import { DataService } from '../services/mockData';
 import { generateInsightReport } from '../services/geminiService';
 import { Card, Badge, Button, Modal, Input, Select } from '../components/UIComponents';
 import { CalendarView } from '../components/CalendarView';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
+
 import { LayoutDashboard, FileText, Users, Map, Wand2, Loader2, MapPin, Download, Edit, Trash2, Plus, UserPlus, Building2, Briefcase, UserCog, UserMinus, FileDown, Menu, LogOut, Settings, Sun, Moon, Palette, ChevronRight, X, Calendar as CalendarIcon } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -19,7 +20,68 @@ interface AdminDashboardProps {
 
 type ViewType = 'dashboard' | 'records' | 'calendar' | 'sites' | 'users' | 'teams';
 
+type ChartSize = {
+  width: number;
+  height: number;
+};
+
+const MeasuredChart: React.FC<{
+  children: (size: ChartSize) => React.ReactNode;
+  className?: string;
+  minHeight?: number;
+}> = ({ children, className = '', minHeight = 250 }) => {
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const [size, setSize] = useState<ChartSize>({ width: 0, height: minHeight });
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+
+    const updateSize = () => {
+      const rect = element.getBoundingClientRect();
+      const nextSize = {
+        width: Math.max(Math.floor(rect.width), 0),
+        height: Math.max(Math.floor(rect.height), minHeight),
+      };
+
+      setSize((prev) => (
+        prev.width === nextSize.width && prev.height === nextSize.height ? prev : nextSize
+      ));
+    };
+
+    updateSize();
+    window.addEventListener('resize', updateSize);
+
+    if (typeof ResizeObserver === 'undefined') {
+      return () => window.removeEventListener('resize', updateSize);
+    }
+
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(element);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateSize);
+    };
+  }, [minHeight]);
+
+  const isReady = size.width > 0 && size.height > 0;
+
+  return (
+    <div ref={containerRef} className={className} style={{ minHeight }}>
+      {isReady ? (
+        children(size)
+      ) : (
+        <div className="h-full flex items-center justify-center text-muted text-sm">
+          图表加载中...
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, setTheme }) => {
+
   const [currentView, setCurrentView] = useState<ViewType>('dashboard');
   const [records, setRecords] = useState<WorkRecord[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
@@ -240,6 +302,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
     } else if (type === 'site' && !item) {
         // For new sites, set default status to active so it appears in client dashboard
         setEditingItem({ name: '', address: '', status: 'active' });
+    } else if (type === 'team' && !item) {
+        setEditingItem({ name: '', leaderId: '' });
     } else {
         setEditingItem(item ? JSON.parse(JSON.stringify(item)) : {});
     }
@@ -248,24 +312,42 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
     setIsModalOpen(true);
   };
 
-  const handleModalSubmit = (e: React.FormEvent) => {
+  const handleModalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const item = editingItem;
-    if (modalType === 'site') DataService.saveSite(item);
-    if (modalType === 'team') DataService.saveTeam(item);
-    if (modalType === 'user') {
-        // Basic validation for users
-        if (!item.username || !item.password) {
-            alert("请输入用户名和密码");
-            return;
+
+    try {
+      if (modalType === 'site') {
+        await DataService.saveSite(item);
+      }
+
+      if (modalType === 'team') {
+        if (!item.name?.trim()) {
+          alert('请输入团队名称');
+          return;
         }
-        DataService.saveUser(item);
-    }
-    if (modalType !== 'teamMembers') {
-        setIsModalOpen(false);
-        refreshData();
+
+        await DataService.saveTeam({ ...item, name: item.name.trim() });
+      }
+
+      if (modalType === 'user') {
+          // Basic validation for users
+          if (!item.username || !item.password) {
+              alert("请输入用户名和密码");
+              return;
+          }
+          await DataService.saveUser(item);
+      }
+
+      if (modalType !== 'teamMembers') {
+          setIsModalOpen(false);
+          await refreshData();
+      }
+    } catch (error: any) {
+      alert(error?.message || '保存失败，请稍后重试');
     }
   };
+
 
   const handleDeleteItem = (type: 'site' | 'user' | 'team', id: string) => {
       if (confirm('确定删除?')) {
@@ -376,47 +458,65 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, theme, 
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="font-bold text-content text-lg">各现场费用支出</h3>
                 </div>
-                <div className="flex-1 w-full min-h-0">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={costData}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.mode === 'dark' ? '#374151' : '#e5e7eb'} />
-                            <XAxis dataKey="name" tick={{fontSize: 12, fill: theme.mode === 'dark' ? '#9ca3af' : '#4b5563'}} interval={0} />
-                            <YAxis tick={{fontSize: 12, fill: theme.mode === 'dark' ? '#9ca3af' : '#4b5563'}} />
-                            <Tooltip 
-                                cursor={{fill: theme.mode === 'dark' ? '#374151' : '#f3f4f6'}}
-                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                            />
-                            <Bar dataKey="value" fill={theme.mode === 'dark' ? theme.primaryColor : `rgb(${theme.primaryColor})`} radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
+                {costData.length > 0 ? (
+                    <MeasuredChart className="flex-1 w-full" minHeight={250}>
+                        {({ width, height }) => (
+                            <BarChart width={width} height={height} data={costData}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.mode === 'dark' ? '#374151' : '#e5e7eb'} />
+                                <XAxis dataKey="name" tick={{fontSize: 12, fill: theme.mode === 'dark' ? '#9ca3af' : '#4b5563'}} interval={0} />
+                                <YAxis tick={{fontSize: 12, fill: theme.mode === 'dark' ? '#9ca3af' : '#4b5563'}} />
+                                <Tooltip 
+                                    cursor={{fill: theme.mode === 'dark' ? '#374151' : '#f3f4f6'}}
+                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                />
+                                <Bar dataKey="value" fill={theme.mode === 'dark' ? theme.primaryColor : `rgb(${theme.primaryColor})`} radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        )}
+                    </MeasuredChart>
+                ) : (
+                    <div className="flex-1 w-full min-h-[250px] flex items-center justify-center text-muted text-sm">
+                        暂无数据
+                    </div>
+                )}
             </Card>
             <Card className="h-[400px] flex flex-col">
                 <h3 className="font-bold text-content text-lg mb-6">记录状态分布</h3>
-                <div className="flex-1 w-full min-h-0">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie 
-                                data={statusData} 
-                                dataKey="value" 
-                                nameKey="name" 
-                                cx="50%" 
-                                cy="50%" 
-                                innerRadius={80} 
-                                outerRadius={110} 
-                                paddingAngle={5}
-                            >
-                                {statusData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
-                                ))}
-                            </Pie>
-                            <Tooltip contentStyle={{ borderRadius: '8px' }} />
-                            <Legend verticalAlign="bottom" height={36}/>
-                        </PieChart>
-                    </ResponsiveContainer>
-                </div>
+                {records.length > 0 ? (
+                    <MeasuredChart className="flex-1 w-full" minHeight={250}>
+                        {({ width, height }) => {
+                            const outerRadius = Math.max(Math.min(Math.min(width, height) * 0.28, 110), 70);
+                            const innerRadius = Math.max(outerRadius - 30, 40);
+
+                            return (
+                                <PieChart width={width} height={height}>
+                                    <Pie 
+                                        data={statusData} 
+                                        dataKey="value" 
+                                        nameKey="name" 
+                                        cx="50%" 
+                                        cy="50%" 
+                                        innerRadius={innerRadius} 
+                                        outerRadius={outerRadius} 
+                                        paddingAngle={5}
+                                    >
+                                        {statusData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip contentStyle={{ borderRadius: '8px' }} />
+                                    <Legend verticalAlign="bottom" height={36}/>
+                                </PieChart>
+                            );
+                        }}
+                    </MeasuredChart>
+                ) : (
+                    <div className="flex-1 w-full min-h-[250px] flex items-center justify-center text-muted text-sm">
+                        暂无数据
+                    </div>
+                )}
             </Card>
         </div>
+
 
         <Card className="border-primary/20 bg-primary/5 relative overflow-hidden">
              <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-primary/10 rounded-full blur-2xl"></div>
